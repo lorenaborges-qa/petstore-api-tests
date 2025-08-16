@@ -1,4 +1,4 @@
-import { generateOrderData, generatePetData } from "./dataGenerator";
+import { generateOrderData, generatePetData, generateUserData } from "./dataGenerator";
 
 Cypress.Commands.add('criarPet', (overrides = {}) => {
     const pet = generatePetData(overrides);
@@ -48,4 +48,47 @@ Cypress.Commands.add('criarPedido', (overrides = {}) => {
         )
     })
 
+})
+Cypress.Commands.add('criarUser', (overrides = {}) => {
+    const createdUser = generateUserData(overrides);
+    return cy.request({
+        method: 'POST',
+        url: `/user`,
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: createdUser
+    }).then((response) => {
+        expect(response.status).to.eq(200);
+        expect(response.body.type).to.eq("unknown");
+        expect(response.body).to.have.all.keys(
+            "code",
+            "type",
+            "message"
+        );
+        return { response, createdUser };
+    })
+})
+Cypress.Commands.add('getUserWithRetry', (username, retries = 3, delay = 500) => {
+    function attemptGet(remainingRetries) {
+        return cy.request({
+            method: 'GET',
+            url: `/user/${username}`,
+            failOnStatusCode: false, // evita falha automática em 404
+        }).then((res) => {
+            if (res.status === 200) {
+                // Usuário encontrado
+                expect(res.body).to.have.property('username', username)
+                return res
+            } else if (remainingRetries > 0) {
+                // Tenta de novo após um pequeno delay
+                cy.wait(delay)
+                return attemptGet(remainingRetries - 1)
+            } else {
+                // Falhou mesmo após retries
+                throw new Error(`Usuário ${username} não encontrado após ${retries} tentativas`)
+            }
+        })
+    }
+    return attemptGet(retries)
 })
